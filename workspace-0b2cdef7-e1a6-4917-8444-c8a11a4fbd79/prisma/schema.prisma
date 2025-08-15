@@ -1,0 +1,385 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String?  @unique
+  password        String?
+  name            String?
+  avatar          String?
+  bio             String?
+  walletAddress   String?  @unique
+  githubUsername  String?
+  twitterUsername String?
+  linkedinUrl     String?
+  website         String?
+  location        String?
+  skills          String? // JSON array of skills
+  role            UserRole @default(PARTICIPANT)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  hackathonRegistrations HackathonRegistration[]
+  teamMemberships        TeamMember[]
+  projectSubmissions     ProjectSubmission[]
+  comments               Comment[]
+  createdHackathons      Hackathon[] @relation("HackathonOrganizer")
+  organizations          OrganizationMember[]
+  nfts                   UserNFT[]
+  tokenTransactions      TokenTransaction[]
+
+  @@map("users")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  logo        String?
+  website     String?
+  twitter     String?
+  github      String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members      OrganizationMember[]
+  hackathons   Hackathon[] @relation("HackathonOrganization")
+  
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id            String   @id @default(cuid())
+  userId        String
+  organizationId String
+  role          OrgRole  @default(MEMBER)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+model Hackathon {
+  id              String            @id @default(cuid())
+  title           String
+  description     String
+  shortDescription String?
+  bannerImage     String?
+  logo            String?
+  startDate       DateTime
+  endDate         DateTime
+  registrationStart DateTime
+  registrationEnd  DateTime
+  maxParticipants  Int?
+  isOnline        Boolean           @default(true)
+  location        String?
+  prizePool       Float?
+  status          HackathonStatus   @default(UPCOMING)
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  organizerId     String
+  organizer       User              @relation("HackathonOrganizer", fields: [organizerId], references: [id])
+  organizationId  String?
+  organization    Organization?      @relation("HackathonOrganization", fields: [organizationId], references: [id])
+  registrations   HackathonRegistration[]
+  projects        ProjectSubmission[]
+  tracks          HackathonTrack[]
+  sponsors        Sponsor[]
+  judges          Judge[]
+  
+  @@map("hackathons")
+}
+
+model HackathonRegistration {
+  id          String              @id @default(cuid())
+  userId      String
+  hackathonId String
+  status      RegistrationStatus  @default(REGISTERED)
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hackathon Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hackathonId])
+  @@map("hackathon_registrations")
+}
+
+model HackathonTrack {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  prize       String?
+  
+  hackathonId String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  hackathon Hackathon           @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  projects  ProjectSubmission[]
+  
+  @@map("hackathon_tracks")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  maxMembers  Int      @default(4)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members  TeamMember[]
+  projects ProjectSubmission[]
+  
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String      @id @default(cuid())
+  userId   String
+  teamId   String
+  role     TeamRole    @default(MEMBER)
+  
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+model ProjectSubmission {
+  id          String              @id @default(cuid())
+  title       String
+  description String
+  githubUrl   String?
+  demoUrl     String?
+  videoUrl    String?
+  images      String? // JSON array of image URLs
+  techStack   String? // JSON array of technologies used
+  status      SubmissionStatus    @default(DRAFT)
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relations
+  authorId    String
+  author      User                @relation(fields: [authorId], references: [id])
+  hackathonId String
+  hackathon   Hackathon           @relation(fields: [hackathonId], references: [id])
+  teamId      String?
+  team        Team?               @relation(fields: [teamId], references: [id])
+  trackId     String?
+  track       HackathonTrack?     @relation(fields: [trackId], references: [id])
+  comments    Comment[]
+  evaluations JudgingAssignment[]
+  
+  @@map("project_submissions")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  authorId      String
+  author        User               @relation(fields: [authorId], references: [id])
+  projectId     String
+  project       ProjectSubmission  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentCommentId String?
+  parentComment Comment?           @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies       Comment[]          @relation("CommentReplies")
+  
+  @@map("comments")
+}
+
+model Sponsor {
+  id          String   @id @default(cuid())
+  name        String
+  logo        String?
+  website     String?
+  description String?
+  tier        SponsorTier @default(BRONZE)
+  
+  hackathonId String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  hackathon Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  
+  @@map("sponsors")
+}
+
+model Judge {
+  id          String   @id @default(cuid())
+  name        String
+  title       String?
+  company     String?
+  avatar      String?
+  bio         String?
+  
+  hackathonId String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  hackathon  Hackathon           @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  assignments JudgingAssignment[]
+  
+  @@map("judges")
+}
+
+model JudgingAssignment {
+  id          String   @id @default(cuid())
+  score       Float?
+  feedback    String?
+  notes       String?
+  
+  judgeId     String
+  judge       Judge              @relation(fields: [judgeId], references: [id])
+  projectId   String
+  project     ProjectSubmission @relation(fields: [projectId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([judgeId, projectId])
+  @@map("judging_assignments")
+}
+
+model UserNFT {
+  id          String   @id @default(cuid())
+  tokenId     String
+  contractAddress String
+  tokenType   TokenType @default(PARTICIPATION)
+  metadata    String?  // JSON string
+  
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_nfts")
+}
+
+model TokenTransaction {
+  id          String           @id @default(cuid())
+  amount      Float
+  type        TransactionType
+  description String?
+  
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("token_transactions")
+}
+
+// Enums
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+  ORGANIZER
+  JUDGE
+  MENTOR
+  PARTICIPANT
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum HackathonStatus {
+  UPCOMING
+  REGISTRATION_OPEN
+  ONGOING
+  JUDGING
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TeamRole {
+  LEADER
+  MEMBER
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  EVALUATED
+  WINNER
+  REJECTED
+}
+
+enum SponsorTier {
+  PLATINUM
+  GOLD
+  SILVER
+  BRONZE
+}
+
+enum TokenType {
+  PARTICIPATION
+  ACHIEVEMENT
+  WINNER
+  MENTOR
+  JUDGE
+}
+
+enum TransactionType {
+  REWARD
+  PARTICIPATION
+  BONUS
+  REFUND
+}
